@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security issue or silent data loss
+    url: https://github.com/SebastianSzturo/litehm/security/advisories/new
+    about: Please report these privately.

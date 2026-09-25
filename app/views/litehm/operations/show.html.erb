@@ -1,0 +1,101 @@
+<p><%= link_to "← All operations", operations_path %></p>
+<div class="row">
+  <h1><%= @operation.table %></h1>
+  <span class="badge <%= litehm_phase_class(@operation) %>"><%= @operation.phase %> · <%= @operation.desired_state %><%= " · stalled" if @operation.stalled? %></span>
+</div>
+<% if @operation.stalled? %>
+  <div class="card">
+    <h2>Stalled</h2>
+    <p>No worker holds the LiteHM writer lease and nothing has been committed since <%= litehm_time(@operation.last_advanced_at || @operation.updated_at) %>. This usually means a worker was killed without a graceful stop. <code>LiteHM::RecoveryJob</code> re-enqueues stalled operations automatically<% if @operation.recovery_enqueued_at %> (last re-enqueued <%= litehm_time(@operation.recovery_enqueued_at) %>)<% end %>.</p>
+    <%= button_to "Retry now", command_operation_path(@operation.plan_id), params: { operation_command: "retry" } %>
+  </div>
+<% end %>
+<div class="card">
+  <dl>
+    <dt>Plan</dt><dd class="mono"><%= @operation.plan_id %></dd>
+    <dt>Copied rows</dt><dd><%= number_with_delimiter(@operation.progress.fetch("copied_rows", 0)) %></dd>
+    <dt>Dirty journal</dt><dd><%= litehm_dirty_rows(@operation) %> <span class="meta">at last sample</span></dd>
+    <dt>Last safe point</dt><dd><%= litehm_time(@operation.last_advanced_at) %></dd>
+    <dt>Updated</dt><dd><%= litehm_time(@operation.updated_at) %></dd>
+    <dt>Revision</dt><dd><%= @operation.execution_revision %></dd>
+    <% if @operation.pause_reason %>
+      <dt>Execution status</dt><dd><%= litehm_reason(@operation.pause_reason) %></dd>
+    <% end %>
+  </dl>
+</div>
+<div class="card">
+  <% if @operation.error && !@operation.terminal? %>
+    <%= button_to "Retry", command_operation_path(@operation.plan_id), params: { operation_command: "retry" } %>
+  <% elsif %w[planned preparing ready].include?(@operation.phase) %>
+    <% if @operation.paused? %>
+      <%= button_to "Resume", command_operation_path(@operation.plan_id), params: { operation_command: "resume" } %>
+    <% else %>
+      <%= button_to "Pause", command_operation_path(@operation.plan_id), params: { operation_command: "pause" } %>
+    <% end %>
+    <% if @operation.ready? %>
+      <%= button_to "Cut over", command_operation_path(@operation.plan_id), params: { operation_command: "cutover" } %>
+    <% end %>
+    <%= button_to "Abort", command_operation_path(@operation.plan_id), params: { operation_command: "abort" }, form: { data: { turbo_confirm: "Abort this migration?" } } %>
+  <% end %>
+  <% if @operation.cut_over? && @operation.archive.fetch("state", nil) == "retained" %>
+    <%= button_to "Release archive", command_operation_path(@operation.plan_id), params: { operation_command: "cleanup" } %>
+  <% end %>
+</div>
+<% if @operation.error %>
+  <div class="card"><h2>Error</h2><pre><%= JSON.pretty_generate(@operation.error) %></pre></div>
+<% end %>
+
+<% metrics = @operation.telemetry %>
+<div class="card">
+  <h2>Worker metrics</h2>
+  <% if metrics.empty? %>
+    <p class="meta">No worker metrics have been recorded yet.</p>
+  <% else %>
+    <p class="meta">Sampled <%= litehm_time(metrics["sampled_at"]) %>. Metrics cover this worker execution. Samples are saved about every 5 seconds at safe points and may be older while work is paused or waiting.</p>
+    <dl>
+      <dt>Last sampled activity</dt><dd><%= litehm_stage(metrics["stage"]) %></dd>
+      <dt>Execution started</dt><dd><%= litehm_time(metrics["started_at"]) %></dd>
+      <dt>Writer lock wait</dt><dd><%= litehm_metric(metrics["lock_wait_ms"], unit: "ms") %> cumulative</dd>
+      <dt>Writer lock retries</dt><dd><%= number_with_delimiter(metrics["lock_retries"]) %></dd>
+      <dt>Rolled-back transactions</dt><dd><%= number_with_delimiter(metrics["rollbacks"]) %></dd>
+      <% if batch = metrics["last_batch"] %>
+        <dt>Last writer transaction</dt><dd><%= litehm_metric(batch["transaction_ms"], unit: "ms") %> · <%= batch["committed"] ? "committed" : "rolled back" %></dd>
+        <dt>Next batch limit</dt><dd><%= number_with_delimiter(batch["next_rows"]) %> rows · <%= batch["kind"] %></dd>
+        <dt>Last pacing delay</dt><dd><%= litehm_metric(batch["pause_ms"], unit: "ms") %> · <%= litehm_reason(batch["pause_reason"]) %></dd>
+      <% end %>
+      <% if retry_sample = metrics["last_retry"] %>
+        <dt>Last retry</dt><dd><%= litehm_reason(retry_sample["reason"]) %> · <%= litehm_time(retry_sample["at"]) %></dd>
+      <% end %>
+    </dl>
+    <h3>Throughput by stage</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Stage</th><th>Row visits</th><th>Rows / second</th><th>Max writer transaction</th></tr></thead>
+        <tbody>
+          <% metrics.fetch("stages", {}).each do |stage, values| %>
+            <% next unless values["rows"].positive? %>
+            <tr>
+              <td><%= litehm_stage(stage) %></td>
+              <td><%= number_with_delimiter(values["rows"]) %></td>
+              <td><%= litehm_metric(values["rows_per_second"]) %></td>
+              <td><%= litehm_metric(values["max_transaction_ms"], unit: "ms") %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    <p class="meta">Rates include time spent waiting and pacing in each stage. Reconciliation can visit a row more than once. Transaction times include COMMIT; explicit checkpoints run afterward.</p>
+    <h3>Last passive WAL checkpoint</h3>
+    <% if checkpoint = metrics["checkpoint"] %>
+      <dl>
+        <dt>Sampled</dt><dd><%= litehm_time(checkpoint["sampled_at"]) %></dd>
+        <dt>Pending frames</dt><dd><%= checkpoint["pending_frames"].nil? ? "Unavailable" : number_with_delimiter(checkpoint["pending_frames"]) %></dd>
+        <dt>WAL / checkpointed frames</dt><dd><%= litehm_metric(checkpoint["log_frames"]) %> / <%= litehm_metric(checkpoint["checkpointed_frames"]) %></dd>
+        <dt>Checkpoint duration</dt><dd><%= litehm_metric(checkpoint["duration_ms"], unit: "ms") %></dd>
+      </dl>
+      <p class="meta">Pending frames are from this checkpoint sample, not the current WAL file size. Readers or another checkpointer can prevent progress.</p>
+    <% else %>
+      <p class="meta">No passive checkpoint has been sampled in this execution.</p>
+    <% end %>
+  <% end %>
+</div>

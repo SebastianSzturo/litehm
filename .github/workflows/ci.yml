@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Ruby ${{ matrix.ruby }} / ${{ matrix.gemfile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.3", "3.4", "4.0"]
+        gemfile: [Gemfile]
+        include:
+          - ruby: "3.4"
+            gemfile: gemfiles/rails_8_1.gemfile
+          - ruby: "3.4"
+            gemfile: gemfiles/sqlite_2_9.gemfile
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/${{ matrix.gemfile }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: SQLite version
+        run: bundle exec ruby -rsqlite3 -e 'puts SQLite3::SQLITE_LOADED_VERSION'
+      - run: bundle exec rake test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: gem build litehm.gemspec

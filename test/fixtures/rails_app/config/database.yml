@@ -1,0 +1,7 @@
+test:
+  adapter: sqlite3
+  database: <%= ENV.fetch("LITEHM_FIXTURE_DATABASE") %>
+  pool: 5
+  timeout: 10000
+  pragmas:
+    journal_mode: wal

@@ -1,0 +1,8 @@
+source "https://rubygems.org"
+
+gemspec path: ".."
+gem "sqlite3", "~> 2.9.6"
+gem "activerecord", "~> 8.1.0"
+gem "rails", "~> 8.1.0"
+gem "minitest", "~> 5.25"
+gem "rake", "~> 13.2"

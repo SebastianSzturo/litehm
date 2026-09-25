@@ -1,0 +1,21 @@
+<div class="row">
+  <h1>LiteHM operations</h1>
+  <span class="meta">Queue: <span class="mono"><%= LiteHM.configuration.queue_name %></span></span>
+</div>
+
+<% if @operations.empty? %>
+  <div class="card">No LiteHM operations have been submitted.</div>
+<% end %>
+
+<% @operations.each do |operation| %>
+  <div class="card">
+    <div class="row">
+      <div>
+        <strong><%= link_to operation.table, operation_path(operation.plan_id) %></strong>
+        <div class="meta mono"><%= operation.plan_id %></div>
+      </div>
+      <span class="badge <%= litehm_phase_class(operation) %>"><%= operation.phase %> · <%= operation.desired_state %><%= " · stalled" if operation.stalled? %></span>
+    </div>
+    <div class="meta">Copied <%= number_with_delimiter(operation.progress.fetch("copied_rows", 0)) %> rows · updated <%= litehm_time(operation.updated_at) %></div>
+  </div>
+<% end %>
