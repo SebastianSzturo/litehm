@@ -99,7 +99,8 @@ authorized.get("/litehm/operations/dummy-messages-search",
 show_body = authorized.response.body
 original_progress = final.progress
 # Exercise explicit and legacy capped samples through the real engine view.
-database.execute("UPDATE litehm_plans SET progress_json = ? WHERE plan_id = ?",
+# Pending changes are shown before cutover, so view the plan as ready.
+database.execute("UPDATE litehm_plans SET progress_json = ?, phase = 'ready' WHERE plan_id = ?",
   [JSON.generate(original_progress.merge("dirty_rows" => 251, "dirty_rows_exact" => false)), final.plan_id])
 authorized.get("/litehm/operations/dummy-messages-search", headers: { "X-LiteHM-Token" => "dummy-secret" })
 capped_sample_visible = authorized.response.body.include?("At least 251")
@@ -108,8 +109,8 @@ database.execute("UPDATE litehm_plans SET progress_json = ? WHERE plan_id = ?",
   [JSON.generate(legacy_progress), final.plan_id])
 authorized.get("/litehm/operations/dummy-messages-search", headers: { "X-LiteHM-Token" => "dummy-secret" })
 legacy_sample_visible = authorized.response.body.include?("At least 251")
-database.execute("UPDATE litehm_plans SET progress_json = ? WHERE plan_id = ?",
-  [JSON.generate(original_progress), final.plan_id])
+database.execute("UPDATE litehm_plans SET progress_json = ?, phase = ? WHERE plan_id = ?",
+  [JSON.generate(original_progress), final.phase, final.plan_id])
 # A lost cleanup request with no live runner renders as stalled with a retry.
 stale = (Time.now.utc - 3_600).iso8601(6)
 original_row = database.get_first_row(
@@ -118,7 +119,7 @@ original_row = database.get_first_row(
 database.execute("UPDATE litehm_plans SET desired_state = 'cleanup_requested', last_advanced_at = ?, updated_at = ? WHERE plan_id = ?",
   [stale, stale, final.plan_id])
 authorized.get("/litehm/operations/dummy-messages-search", headers: { "X-LiteHM-Token" => "dummy-secret" })
-stalled_visible = authorized.response.body.include?("Stalled") && authorized.response.body.include?("Retry now")
+stalled_visible = authorized.response.body.include?(">Stalled<") && authorized.response.body.include?(">Retry<")
 database.execute("UPDATE litehm_plans SET desired_state = ?, last_advanced_at = ?, updated_at = ? WHERE plan_id = ?",
   [*original_row.values_at("desired_state", "last_advanced_at", "updated_at"), final.plan_id])
 
@@ -126,7 +127,7 @@ database.execute("UPDATE litehm_plans SET desired_state = ?, last_advanced_at = 
 LiteHM.change_table(:messages, id: "dummy-deferred", connection: ActiveRecord::Base.connection,
   start: :paused) { |table| table.add_column :deferred_flag, :integer, null: false, default: 0 }
 authorized.get("/litehm/operations/dummy-deferred", headers: { "X-LiteHM-Token" => "dummy-secret" })
-deferred_visible = authorized.response.body.include?("Waiting to be started") &&
+deferred_visible = authorized.response.body.include?(">Waiting to start<") &&
   authorized.response.body.include?(">Start<")
 
 puts JSON.generate(
@@ -155,9 +156,9 @@ puts JSON.generate(
   index_names:,
   show_status: authorized.response.status,
   cache_control: authorized.response.headers["Cache-Control"],
-  show_includes_progress: show_body.include?("Copied rows"),
-  show_includes_metrics: show_body.include?("Worker metrics") && show_body.include?("Throughput by stage"),
-  show_includes_checkpoint: show_body.include?("Pending frames"),
+  show_includes_progress: show_body.include?("Rows copied") && show_body.include?(">Live · archive kept<"),
+  show_includes_metrics: show_body.include?("Worker <span>sampled") && show_body.include?("Max txn"),
+  show_includes_checkpoint: show_body.include?("WAL pending"),
   persisted_copy_rows: final.telemetry.dig("stages", "copy", "rows"),
   capped_sample_visible:, legacy_sample_visible:, stalled_visible:, deferred_visible:,
 

@@ -96,7 +96,8 @@ module LiteHM
         last_advanced_at: existing["last_advanced_at"],
         created_at: existing.fetch("created_at"), updated_at: existing.fetch("updated_at"),
         stalled: health ? stalled?(existing) : nil,
-        recovery_enqueued_at: existing["recovery_enqueued_at"]
+        recovery_enqueued_at: existing["recovery_enqueued_at"],
+        **(health ? plan_summary(existing) : {})
       )
     end
 
@@ -293,6 +294,17 @@ module LiteHM
       when "cut_over" then desired == "cleanup_requested"
       else false
       end
+    end
+
+    # What the engine shows about the plan itself: the recorded intent, the
+    # policy, and when it cut over. Parsed only for health reads.
+    def plan_summary(existing)
+      plan = CanonicalJSON.load(existing.fetch("plan_json"))
+      receipt = parse_json(existing["receipt_json"])
+      { intent: plan.dig("intent", "operations") || [], policy: plan.fetch("policy", {}),
+        cutover_at: receipt && receipt["cutover_at"] }
+    rescue JSON::ParserError
+      { intent: [], policy: {}, cutover_at: nil }
     end
 
     def writer_lease_live?(now)

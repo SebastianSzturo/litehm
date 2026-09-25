@@ -1,21 +1,44 @@
-<div class="row">
-  <h1>LiteHM operations</h1>
-  <span class="meta">Queue: <span class="mono"><%= LiteHM.configuration.queue_name %></span></span>
-</div>
+<% if @summaries.empty? %>
+  <p class="counts">No LiteHM operations have been submitted.</p>
+<% else %>
+  <% active, finished = @summaries.partition { |summary| !summary.finished? } %>
+  <p class="counts"><%= litehm_counts(@summaries) %></p>
 
-<% if @operations.empty? %>
-  <div class="card">No LiteHM operations have been submitted.</div>
-<% end %>
-
-<% @operations.each do |operation| %>
-  <div class="card">
-    <div class="row">
-      <div>
-        <strong><%= link_to operation.table, operation_path(operation.plan_id) %></strong>
-        <div class="meta mono"><%= operation.plan_id %></div>
+  <% active.each do |summary| %>
+    <article class="op">
+      <div class="op-head">
+        <div>
+          <%= link_to summary.change_summary, operation_path(summary.plan_id), class: "op-title" %>
+          <div class="op-sub"><span class="tbl"><%= summary.table %></span> · <span class="mono"><%= summary.plan_id %></span></div>
+        </div>
+        <%= litehm_chip(summary) %>
       </div>
-      <span class="badge <%= litehm_phase_class(operation) %>"><%= operation.phase %> · <%= operation.desired_state %><%= " · stalled" if operation.stalled? %></span>
-    </div>
-    <div class="meta">Copied <%= number_with_delimiter(operation.progress.fetch("copied_rows", 0)) %> rows · updated <%= litehm_time(operation.updated_at) %></div>
-  </div>
+      <div class="op-body">
+        <%= render "track", summary:, detailed: false %>
+        <div class="op-side">
+          <span class="op-now"><%= summary.status_line %></span>
+          <%= litehm_action_button(summary, summary.primary_action, primary: true) if summary.primary_action %>
+        </div>
+      </div>
+    </article>
+  <% end %>
+
+  <% if finished.any? %>
+    <h2 class="section">Done</h2>
+    <% finished.each do |summary| %>
+      <article class="op finished">
+        <div class="op-head">
+          <div>
+            <%= link_to summary.change_summary, operation_path(summary.plan_id), class: "op-title" %>
+            <div class="op-sub"><span class="tbl"><%= summary.table %></span> · <span class="mono"><%= summary.plan_id %></span></div>
+          </div>
+          <div class="op-right">
+            <span class="op-now"><%= summary.status_line %></span>
+            <%= litehm_action_button(summary, summary.primary_action, primary: true) if summary.primary_action %>
+            <%= litehm_chip(summary) %>
+          </div>
+        </div>
+      </article>
+    <% end %>
+  <% end %>
 <% end %>

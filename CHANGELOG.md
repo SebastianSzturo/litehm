@@ -24,6 +24,10 @@ Initial public release.
   `LiteHM.revert` as a second online migration.
 - Mountable Rails engine for monitoring and operating migrations, closed unless
   an authorization callback is configured.
+- Engine dashboard: plain-language states (failed, stalled, waiting to start,
+  ready to cut over, ...), a copy → catch up → validate → ready → cut over →
+  clean up track, copy progress and ETA, and only the commands the operation
+  allows. Plans now record the copy's lower key bound to estimate progress.
 - Active Record and raw `sqlite3` compilers, including raw DDL targets for
   `STRICT`, `WITHOUT ROWID`, generated columns, and expression indexes.
 - `live_v1` foreign-key protocol that keeps parent tables writable.

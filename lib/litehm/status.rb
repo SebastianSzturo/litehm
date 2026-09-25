@@ -5,7 +5,7 @@ module LiteHM
     ATTRIBUTES = %i[
       plan_id table phase source_hash target_hash error progress archive retry_action
       desired_state execution_revision last_advanced_at created_at updated_at
-      stalled recovery_enqueued_at
+      stalled recovery_enqueued_at intent policy cutover_at
     ].freeze
 
     attr_reader(*ATTRIBUTES)
@@ -14,11 +14,19 @@ module LiteHM
       new(plan_id: plan_id, table: nil, phase: "missing", source_hash: nil,
         target_hash: nil, error: nil, progress: {}, archive: {}, retry_action: "forbidden",
         desired_state: "stopped", execution_revision: 0, last_advanced_at: nil,
-        created_at: nil, updated_at: nil, stalled: false, recovery_enqueued_at: nil)
+        created_at: nil, updated_at: nil, stalled: false, recovery_enqueued_at: nil,
+        intent: [], policy: {}, cutover_at: nil)
     end
 
+    # intent, policy, and cutover_at describe the plan for the engine; they are
+    # loaded with the health assessment and are nil on the runner's hot path.
+    OPTIONAL = %i[intent policy cutover_at].freeze
+
     def initialize(**attributes)
-      ATTRIBUTES.each { |key| instance_variable_set("@#{key}", attributes.fetch(key)) }
+      ATTRIBUTES.each do |key|
+        value = OPTIONAL.include?(key) ? attributes[key] : attributes.fetch(key)
+        instance_variable_set("@#{key}", value)
+      end
       freeze
     end
 

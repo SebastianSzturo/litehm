@@ -70,7 +70,7 @@ holds the database writer lease, and nothing was committed for
 `config.stalled_after` seconds (15 minutes by default). `LiteHM.recover_stalled`
 re-enqueues each stall at most once per stall window; duplicate deliveries are
 harmless because the writer lease serializes them. The engine marks stalled
-operations and offers **Retry now**. An enqueue failure also leaves the plan
+operations and offers **Retry**. An enqueue failure also leaves the plan
 visible in the engine; pressing Retry safely enqueues it again. The
 target-database ledger—not the job payload—remains authoritative for copied
 cursors, phase, commands, and errors.
@@ -179,9 +179,10 @@ even with local Rails event error-raising enabled. Events are best-effort
 observations and may be lost or repeated across a crash; the operation ledger is
 the source of truth for execution and recovery.
 
-The engine shows worker throughput by stage, cumulative writer acquisition wait,
-lock retries, rollbacks, last pacing/retry reason, and the last passive checkpoint's
-pending frames. Its bounded summary is available as `LiteHM.status(id).telemetry`
+The engine shows copy progress and rate, the last and longest writer
+transaction, the next batch size, writer acquisition wait, lock retries,
+rollbacks, and the last passive checkpoint's pending WAL frames. Copy percentage
+and ETA are shown for single integer keys; other key shapes show copied rows only. Its bounded summary is available as `LiteHM.status(id).telemetry`
 and stored in the existing progress JSON during an existing fenced transaction.
 It is sampled about every five seconds and at stage/milestone boundaries, never
 by adding a telemetry-only writer transaction or work to atomic cutover. A sample

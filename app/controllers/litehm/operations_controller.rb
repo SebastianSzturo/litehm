@@ -12,12 +12,17 @@ module LiteHM
     }.freeze
 
     def index
+      @now = Time.now.utc
       @operations = LiteHM.operations(connection: litehm_connection)
+      @summaries = OperationSummary.sort(@operations.map { |status| OperationSummary.new(status, now: @now) })
     end
 
     def show
+      @now = Time.now.utc
       @operation = LiteHM.status(params[:plan_id], connection: litehm_connection)
       raise ActionController::RoutingError, "LiteHM operation not found" if @operation.missing?
+
+      @summary = OperationSummary.new(@operation, now: @now)
     end
 
     def command

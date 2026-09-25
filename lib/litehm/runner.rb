@@ -505,7 +505,7 @@ module LiteHM
         create_capture
         @store.transition(@plan.id, phase: :preparing,
           progress: { "copy_cursor" => nil, "copied_rows" => 0, "dirty_rows" => 0,
-            "copy_upper_bound" => copy_upper_bound,
+            "copy_upper_bound" => copy_upper_bound, "copy_lower_bound" => copy_lower_bound,
             "artifact_hash" => artifact_hash, "capture_repairs" => 0 })
       end
       Testing.inject(:after_prepare_commit, plan_id: @plan.id)
@@ -760,10 +760,20 @@ module LiteHM
     end
 
     def copy_upper_bound
+      copy_bound("DESC")
+    end
+
+    # Only used to estimate copy progress in the engine; the copy itself is
+    # bounded by copy_upper_bound alone.
+    def copy_lower_bound
+      copy_bound("ASC")
+    end
+
+    def copy_bound(direction)
       columns = @source_keys.map { |key| SQL.identifier(key) }
       row = @connection.execute(<<~SQL).first
         SELECT #{columns.join(', ')} FROM #{SQL.identifier(@plan.table)}
-        ORDER BY #{columns.map { |column| "#{column} DESC" }.join(', ')} LIMIT 1
+        ORDER BY #{columns.map { |column| "#{column} #{direction}" }.join(', ')} LIMIT 1
       SQL
       row && ValueCodec.encode_row(row)
     end
@@ -1690,6 +1700,7 @@ module LiteHM
           progress: {
             "copy_cursor" => nil,
             "copy_upper_bound" => copy_upper_bound,
+            "copy_lower_bound" => copy_lower_bound,
             "copied_rows" => 0,
             "dirty_rows" => 0,
             "artifact_hash" => artifact_hash,

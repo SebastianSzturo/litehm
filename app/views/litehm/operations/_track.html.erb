@@ -1,0 +1,9 @@
+<ol class="rail" aria-label="Progress">
+  <% LiteHM::OperationSummary::STEPS.each_with_index do |name, index| %>
+    <li class="<%= summary.node_state(index) %>" style="--fill: <%= litehm_track_fill(summary, index) %>%">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="label"><%= name %></span>
+      <span class="sub"><%= litehm_track_note(summary, index, detailed) %></span>
+    </li>
+  <% end %>
+</ol>
