@@ -15,6 +15,9 @@ Initial public release.
   bounded reconciliation, exact validation, and one atomic cutover.
 - Asynchronous execution through Active Job Continuation on a dedicated queue,
   with an inline escape hatch for consoles, tests, and rehearsals.
+- `start: :paused` on `change_table`, `submit`, and `revert` registers an
+  operation without starting it, so an operator resumes it when convenient.
+- The engine serves the LiteHM icon as its favicon.
 - Crash-safe resume from the target-database ledger; `LiteHM::RecoveryJob` for
   workers that died without a graceful stop.
 - Operator controls: pause, resume, abort, manual cutover, archive cleanup, and

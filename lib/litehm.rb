@@ -105,12 +105,16 @@ module LiteHM
     end
   end
 
-  def change_table(table, execution: nil, **options, &block)
+  # `start: :paused` registers the operation without starting it (async only):
+  # nothing touches the table until an operator resumes it, so the heavy copy
+  # runs when someone chooses, not when the deploy happens. Inline execution
+  # always runs immediately.
+  def change_table(table, execution: nil, start: :running, **options, &block)
     migration = plan(table, **options, &block)
     mode = (execution || configuration.execution_mode).to_sym
     case mode
     when :async
-      submit(migration, connection: options[:connection])
+      submit(migration, connection: options[:connection], start:)
     when :inline
       run(migration, connection: options[:connection])
     else
@@ -118,11 +122,10 @@ module LiteHM
     end
   end
 
-  def submit(plan, connection: nil)
-    stored = with_connection(connection || plan.database_path, execution: true) do |opened|
-      opened.busy_timeout_ms = plan.policy.fetch('busy_timeout_ms')
-      Store.new(opened).register(plan)
-    end
+  def submit(plan, connection: nil, start: :running)
+    stored, current = register_for_start(plan, connection || plan.database_path, start)
+    return current if current.paused?
+
     enqueue_operation(stored.database_path, stored.id)
     status(stored.id, connection: stored.database_path)
   end
@@ -147,7 +150,7 @@ module LiteHM
     end
   end
 
-  def revert(receipt_or_id, connection: nil, id: nil, policy: {}, execution: nil, &block)
+  def revert(receipt_or_id, connection: nil, id: nil, policy: {}, execution: nil, start: :running, &block)
     plan_id = receipt_or_id.is_a?(Receipt) ? receipt_or_id.plan_id : receipt_or_id.to_s
     with_connection(connection || configured_connection, execution: true) do |opened|
       store = Store.new(opened)
@@ -161,7 +164,9 @@ module LiteHM
       mode = (execution || configuration.execution_mode).to_sym
       case mode
       when :async
-        stored = Store.new(opened).register(reverse_plan)
+        stored, current = register_for_start(reverse_plan, opened.path, start)
+        next current if current.paused?
+
         enqueue_operation(stored.database_path, stored.id)
         Store.new(opened).status(stored.id)
       when :inline
@@ -238,6 +243,28 @@ module LiteHM
     current
   end
 
+  # Registers the plan; with `start: :paused` a newly registered plan is paused
+  # before any job exists. Re-submitting an existing plan keeps its state.
+  def register_for_start(plan, connection, start)
+    unless %i[running paused].include?(start.to_sym)
+      raise ArgumentError, "start must be :running or :paused"
+    end
+
+    with_connection(connection, execution: true) do |opened|
+      opened.busy_timeout_ms = plan.policy.fetch("busy_timeout_ms")
+      store = Store.new(opened)
+      fresh = store.status(plan.id).missing?
+      stored = store.register(plan)
+      if fresh && start.to_sym == :paused
+        store.command(stored.id, :paused, phases: %w[planned])
+        current = store.status(stored.id)
+        Telemetry.emit("state_changed", { version: 1, plan_id: current.plan_id, table: current.table,
+          phase: current.phase, desired_state: current.desired_state, pause_reason: current.pause_reason })
+      end
+      [stored, store.status(stored.id)]
+    end
+  end
+
   def enqueue_operation(database_path, plan_id)
     job = OperationJob.perform_later(database_path, plan_id)
     unless job && job.successfully_enqueued?
@@ -306,5 +333,5 @@ module LiteHM
   ensure
     opened&.close
   end
-  private_class_method :with_connection
+  private_class_method :with_connection, :register_for_start
 end

@@ -41,6 +41,10 @@ authorized = ActionDispatch::Integration::Session.new(Rails.application)
 authorized.get("/litehm", headers: { "X-LiteHM-Token" => "dummy-secret" })
 authorized_status = authorized.response.status
 index_body = authorized.response.body
+icon = ActionDispatch::Integration::Session.new(Rails.application)
+icon.get("/litehm/icon.png", headers: { "X-LiteHM-Token" => "dummy-secret" })
+unauthorized_icon = ActionDispatch::Integration::Session.new(Rails.application)
+unauthorized_icon.get("/litehm/icon.png")
 
 # Exercise engine commands before starting the worker.
 authorized.post("/litehm/operations/dummy-messages-search/command",
@@ -117,6 +121,13 @@ stalled_visible = authorized.response.body.include?("Stalled") && authorized.res
 database.execute("UPDATE litehm_plans SET desired_state = ?, last_advanced_at = ?, updated_at = ? WHERE plan_id = ?",
   [*original_row.values_at("desired_state", "last_advanced_at", "updated_at"), final.plan_id])
 
+# An operation registered with start: :paused waits for an operator to start it.
+LiteHM.change_table(:messages, id: "dummy-deferred", connection: ActiveRecord::Base.connection,
+  start: :paused) { |table| table.add_column :deferred_flag, :integer, null: false, default: 0 }
+authorized.get("/litehm/operations/dummy-deferred", headers: { "X-LiteHM-Token" => "dummy-secret" })
+deferred_visible = authorized.response.body.include?("Waiting to be started") &&
+  authorized.response.body.include?(">Start<")
+
 puts JSON.generate(
   migration_seconds:,
   submitted_columns:,
@@ -125,6 +136,12 @@ puts JSON.generate(
   unauthorized_status: unauthorized.response.status,
   authorized_status:,
   index_page_includes_plan: index_body.include?("dummy-messages-search"),
+  index_page_links_icon: index_body.include?(%(rel="icon" type="image/png" href="/litehm/icon.png")),
+  icon_status: icon.response.status,
+  icon_content_type: icon.response.media_type,
+  icon_cache_control: icon.response.headers["Cache-Control"],
+  icon_png: icon.response.body.b.start_with?("\x89PNG".b),
+  unauthorized_icon_status: unauthorized_icon.response.status,
   paused: paused.paused?,
   crash_signal: crash_status.termsig,
   restarted_worker: worker_status.success?,
@@ -138,7 +155,7 @@ puts JSON.generate(
   show_includes_metrics: show_body.include?("Worker metrics") && show_body.include?("Throughput by stage"),
   show_includes_checkpoint: show_body.include?("Pending frames"),
   persisted_copy_rows: final.telemetry.dig("stages", "copy", "rows"),
-  capped_sample_visible:, legacy_sample_visible:, stalled_visible:,
+  capped_sample_visible:, legacy_sample_visible:, stalled_visible:, deferred_visible:,
 
   integrity: ActiveRecord::Base.connection.select_value("PRAGMA integrity_check")
 )

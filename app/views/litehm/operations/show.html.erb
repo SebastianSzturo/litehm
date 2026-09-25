@@ -28,7 +28,7 @@
     <%= button_to "Retry", command_operation_path(@operation.plan_id), params: { operation_command: "retry" } %>
   <% elsif %w[planned preparing ready].include?(@operation.phase) %>
     <% if @operation.paused? %>
-      <%= button_to "Resume", command_operation_path(@operation.plan_id), params: { operation_command: "resume" } %>
+      <%= button_to(@operation.phase == "planned" ? "Start" : "Resume", command_operation_path(@operation.plan_id), params: { operation_command: "resume" }) %>
     <% else %>
       <%= button_to "Pause", command_operation_path(@operation.plan_id), params: { operation_command: "pause" } %>
     <% end %>

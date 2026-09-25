@@ -83,6 +83,7 @@ plan = LiteHM.plan(:messages, id: "20260818-message-delivery") do |table|
 end
 
 LiteHM.submit(plan)               # asynchronous default used by change_table
+LiteHM.submit(plan, start: :paused) # register only; nothing runs until resume
 LiteHM.status(plan.id)            # observational; never creates control tables
 LiteHM.pause(plan.id)             # observed at the next committed safe point
 LiteHM.resume(plan.id)            # enqueue/resume the same durable plan

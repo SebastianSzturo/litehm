@@ -18,6 +18,7 @@ module LiteHM
     }.freeze
     REASONS = {
       "operator_pause" => "Paused by an operator", "operation_error" => "Stopped after an error",
+      "awaiting_start" => "Waiting to be started",
       "awaiting_cutover" => "Awaiting cutover", "abort_requested" => "Abort requested",
       "cleanup_requested" => "Cleanup requested", "cutover_requested" => "Cutover requested",
       "writer_duty_cycle" => "Yielding time to application writers", "writer_lock" => "Writer lock contention",

@@ -123,6 +123,9 @@ exists. Roll out in three steps:
 2. Wait until the dashboard shows the operation has cut over.
 3. Deploy code that uses the new column or index.
 
+To run the copy at a time you choose rather than during the deploy, pass
+`start: :paused` and press Resume in the dashboard when ready.
+
 Always pass an explicit `id`. Re-running the same id resumes the same plan.
 Use `up`/`down` rather than `change`, with `down` calling `LiteHM.revert`.
 

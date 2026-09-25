@@ -21,6 +21,12 @@ class EngineDummyTest < Minitest::Test
       assert_equal "litehm", result.fetch("queue")
       assert_equal 403, result.fetch("unauthorized_status")
       assert_equal 200, result.fetch("authorized_status")
+      assert result.fetch("index_page_links_icon")
+      assert_equal 200, result.fetch("icon_status")
+      assert_equal "image/png", result.fetch("icon_content_type")
+      assert_includes result.fetch("icon_cache_control"), "private"
+      assert result.fetch("icon_png")
+      assert_equal 403, result.fetch("unauthorized_icon_status")
       assert result.fetch("index_page_includes_plan")
       assert result.fetch("paused")
       assert_equal Signal.list.fetch("KILL"), result.fetch("crash_signal")
@@ -38,6 +44,7 @@ class EngineDummyTest < Minitest::Test
       assert result.fetch("capped_sample_visible")
       assert result.fetch("legacy_sample_visible")
       assert result.fetch("stalled_visible")
+      assert result.fetch("deferred_visible")
       assert_equal "ok", result.fetch("integrity")
     end
   end

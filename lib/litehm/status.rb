@@ -63,6 +63,7 @@ module LiteHM
 
     def pause_reason
       return "operation_error" if error && !terminal?
+      return "awaiting_start" if paused? && phase == "planned"
       return "operator_pause" if paused?
       return "awaiting_cutover" if ready? && desired_state == "running"
       return desired_state if %w[abort_requested cleanup_requested cutover_requested].include?(desired_state)
