@@ -15,7 +15,12 @@ class EngineDummyTest < Minitest::Test
       assert status.success?, "Rails engine dummy failed:\n#{stdout}\n#{stderr}"
 
       result = JSON.parse(stdout.lines.last)
-      assert_operator result.fetch("migration_seconds"), :<, 2.0
+      # The migration only schedules the work: nothing is copied or run inline.
+      # (Wall-clock bounds flake on shared CI runners; this state cannot.)
+      assert_equal "planned", result.fetch("submitted_phase")
+      assert_equal 0, result.fetch("submitted_copied_rows")
+      assert_equal 0, result.fetch("submitted_jobs_performed")
+      assert_operator result.fetch("migration_seconds"), :<, 30.0
       assert_equal %w[id body sent_at], result.fetch("submitted_columns")
       assert result.fetch("migration_version_recorded")
       assert_equal "litehm", result.fetch("queue")

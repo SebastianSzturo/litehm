@@ -33,6 +33,7 @@ started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 context.migrate
 migration_seconds = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
 submitted_columns = ActiveRecord::Base.connection.execute("PRAGMA table_xinfo(messages)").map { |row| row["name"] }
+submitted = LiteHM.status("dummy-messages-search", connection: ActiveRecord::Base.connection)
 initial_job = adapter.enqueued_jobs.shift
 
 unauthorized = ActionDispatch::Integration::Session.new(Rails.application)
@@ -130,6 +131,9 @@ deferred_visible = authorized.response.body.include?("Waiting to be started") &&
 
 puts JSON.generate(
   migration_seconds:,
+  submitted_phase: submitted.phase.to_s,
+  submitted_copied_rows: submitted.progress.fetch("copied_rows", 0),
+  submitted_jobs_performed: adapter.performed_jobs.size,
   submitted_columns:,
   migration_version_recorded: context.get_all_versions.include?(20_260_819_000_000),
   queue: initial_job.fetch(:queue),
